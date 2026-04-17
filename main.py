@@ -425,7 +425,8 @@ async def router(message: Message):
                 "noplaylist": True,
                 'cookiefile': 'cookies.txt',
                     'format': 'best',
-                    'noplaylist': True,
+                'proxy': 'http://user:password@proxy_address:port',
+                    'noplaylist': True
             }
 
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
