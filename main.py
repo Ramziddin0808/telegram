@@ -10,7 +10,6 @@ from google import genai
 from dotenv import load_dotenv
 from rembg import remove
 from PIL import Image
-from moviepy.editor import VideoFileClip
 import imageio_ffmpeg as ffmpeg
 import uuid
 from moviepy import VideoFileClip
