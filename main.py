@@ -58,8 +58,7 @@ keyboard = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text='▶️ youtubdan videoni yuklash',callback_data="youtube")],
     [InlineKeyboardButton(text="🧼 Fonni olib tashlash",callback_data="rbg")],
     [InlineKeyboardButton(text="👩‍💻 qrcode yaratish",callback_data="qr")],
-    [InlineKeyboardButton(text="🎵 Musiqani topish",callback_data='music')],
-    [InlineKeyboardButton(text="🤖 suniy intelekt",callback_data="ai")]
+    [InlineKeyboardButton(text="🎵 Musiqani topish",callback_data='music')]
 ])
 
 
@@ -326,12 +325,6 @@ async def Aloqa(message: Message):
 async def yt_mode(call: CallbackQuery):
     user_state[call.from_user.id] = "youtube"
     await call.message.answer("YouTube link tashlang")
-    await call.answer()
-#----------- suniy intelekt
-@dp.callback_query(F.data == "ai")
-async def ai_mode(call: CallbackQuery):
-    user_state[call.from_user.id] = "ai"
-    await call.message.answer("🤖 AI mode ON. Savol yozing")
     await call.answer()
 #--------- MUSIC BOT ---------
 @dp.callback_query(F.data == "music")
