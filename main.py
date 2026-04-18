@@ -1,265 +1,497 @@
 import asyncio
 import os
-import uuid
-import logging
-import io
-import qrcode
-from dotenv import load_dotenv
-from PIL import Image
-from rembg import remove
 from deep_translator import GoogleTranslator
 import wikipedia
+from aiogram import Bot, Dispatcher, F,types
+from aiogram.types import Message,ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery,FSInputFile
 from gtts import gTTS
+from aiogram.types import BufferedInputFile
+from google import genai
+from dotenv import load_dotenv
+from rembg import remove
+from PIL import Image
+import imageio_ffmpeg as ffmpeg
+import uuid
+from moviepy import VideoFileClip
+import io
+import qrcode
+import logging
 import yt_dlp
 import imageio_ffmpeg as ffmpeg
 
-from aiogram import Bot, Dispatcher, F, types
-from aiogram.types import (
-    Message, ReplyKeyboardMarkup, KeyboardButton, 
-    InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, FSInputFile
-)
-
-# FFmpeg yo'lini sozlash
 ffmpeg_path = ffmpeg.get_ffmpeg_exe()
 
+
 load_dotenv()
+
 TOKEN = os.getenv('TOKEN')
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY') # .env fayliga qo'shishni unutmang
 
 bot = Bot(token=TOKEN)
-dp = Dispatcher()
 wikipedia.set_lang('uz')
+dp = Dispatcher()
+GEMINI_API_KEY = 'AIzaSyDhG9IkBsn6SNyS6j-FvNqaWaJkgvFzPJg'
 
-# Foydalanuvchi holatlarini saqlash
-user_state = {}
+#foydalanuvchilarni saqlash
+user_mode = {}
+user_images = {}
 user_lang = {}
+user_state = {}
+client = genai.Client(api_key=GEMINI_API_KEY)
 
-# --- KLAVIATURALAR ---
+
 menyu = ReplyKeyboardMarkup(
-    keyboard=[[KeyboardButton(text="Aloqa"), KeyboardButton(text="menyu")]],
-    resize_keyboard=True
+    keyboard=[[KeyboardButton(text="Aloqa"), KeyboardButton(text="menyu")],         
+              ],
+    resize_keyboard=True
 )
 
-keyboard = InlineKeyboardMarkup(inline_keyboard=[
-    [InlineKeyboardButton(text='Wikipedia', callback_data='wiki')],
-    [InlineKeyboardButton(text=' Tarjimon', callback_data='nima')],
-    [InlineKeyboardButton(text='▶️ YouTubedan video', callback_data="youtube")],
-    [InlineKeyboardButton(text="🧼 Fonni olib tashlash", callback_data="rbg")],
-    [InlineKeyboardButton(text="👩‍💻 QRCode yaratish", callback_data="qr")],
-    [InlineKeyboardButton(text="🎵 Musiqani yuklash", callback_data='music')]
-])
-
 wiki_lang = InlineKeyboardMarkup(inline_keyboard=[
-    [InlineKeyboardButton(text='Rus tili', callback_data='lang_ru')],
-    [InlineKeyboardButton(text='Ingliz tili', callback_data='lang_en')],
-    [InlineKeyboardButton(text='Uzbek tili', callback_data='lang_uz')]
+    [InlineKeyboardButton(text='Rus tili',callback_data='lang_ru')],
+    [InlineKeyboardButton(text='Inglis tili',callback_data='lang_en')],
+    [InlineKeyboardButton(text='Nemis tili',callback_data='lang_ne')],
+    [InlineKeyboardButton(text='Yapon tili',callback_data='lang_ja')],
+    [InlineKeyboardButton(text='Arab tili',callback_data='lang_ar')] ])
+
+keyboard = InlineKeyboardMarkup(inline_keyboard=[
+    [InlineKeyboardButton(text='Wikipedia', callback_data='wiki')],
+    [InlineKeyboardButton(text=' Tarjimon', callback_data='nima')],
+    [InlineKeyboardButton(text='▶️ youtubdan videoni yuklash',callback_data="youtube")],
+    [InlineKeyboardButton(text="🧼 Fonni olib tashlash",callback_data="rbg")],
+    [InlineKeyboardButton(text="👩‍💻 qrcode yaratish",callback_data="qr")],
+    [InlineKeyboardButton(text="🎵 Musiqani topish",callback_data='music')]
 ])
 
-lang_buttons = InlineKeyboardMarkup(inline_keyboard=[
-    [InlineKeyboardButton(text='Ingliz tili', callback_data='inglis')],
-    [InlineKeyboardButton(text="Arab tili", callback_data='artili')],
-    [InlineKeyboardButton(text='Rus tili', callback_data='ruscha')],
-    [InlineKeyboardButton(text="Nemis tili", callback_data="nemis")]
+
+
+lang = InlineKeyboardMarkup(inline_keyboard=[
+    [InlineKeyboardButton(text='Inglis tili',callback_data='inglis')],
+    [InlineKeyboardButton(text="Arab tili",callback_data='artili')],
+    [InlineKeyboardButton(text='Rus tili',callback_data='ruscha')],
+    [InlineKeyboardButton(text="Nemis tili",callback_data="nemis")],
+    [InlineKeyboardButton(text="Yapon tili",callback_data="yapon")]
 ])
 
-# --- YORDAMCHI FUNKSIYALAR ---
-def make_qr(text: str):
-    filename = f"{uuid.uuid4()}.png"
-    img = qrcode.make(text)
-    img.save(filename)
-    return filename
 
-# --- HANDLERLAR ---
+wikipedia.set_lang('uz')
 @dp.message(F.text == '/start')
 async def start(message: Message):
-    await message.answer(f"Assalomu aleykum {message.from_user.full_name}!", reply_markup=menyu)
+    await message.answer(f"Assalomu aleykum {message.from_user.full_name}", reply_markup=menyu)
 
 @dp.message(F.text == "menyu")
-async def show_menu(message: Message):
-    await message.answer("Vazifani tanlang:", reply_markup=keyboard)
-
-@dp.message(F.text == 'Aloqa')
-async def contact(message: Message):
-    await message.answer("Admin: @Ramziddin0808")
-
-# --- CALLBACKLAR ---
-@dp.callback_query(F.data == "qr")
-async def qr_mode(call: CallbackQuery):
-    user_state[call.from_user.id] = "qr"
-    await call.message.answer("QR kod uchun matn yoki link yuboring:")
-    await call.answer()
-
+async def yordam(message: Message):
+    await message.answer("Vazifani tanlang", reply_markup=keyboard)
+#---------------- 🧼 Fonni olib tashlash -------
 @dp.callback_query(F.data == "rbg")
-async def rbg_mode(call: CallbackQuery):
-    user_state[call.from_user.id] = "rbg"
-    await call.message.answer("🧽 Rasm yuboring, fonni olib tashlayman.")
-    await call.answer()
+async def bg_mode(call: CallbackQuery):
+    user_id = call.from_user.id
+    user_state[user_id] = "rbg"   
+    await call.message.answer("🧽 Rasm yuboring, orqa fon olib tashlanadi\n\n⏳ Rasm yuborganingizdan keyin darhol ishlaydi.")
+    await call.answer()
 
-@dp.callback_query(F.data == "wiki")
-async def wiki_mode(call: CallbackQuery):
-    user_state[call.from_user.id] = "wiki"
-    await call.message.answer("Wikipedia uchun mavzu kiriting:", reply_markup=wiki_lang)
-    await call.answer()
+    
+@dp.message(F.photo)
+async def photo_handler(message: Message):
+    user_id = message.from_user.id
 
-@dp.callback_query(F.data == "youtube")
-async def yt_mode(call: CallbackQuery):
-    user_state[call.from_user.id] = "youtube"
-    await call.message.answer("YouTube linkini yuboring:")
-    await call.answer()
+    # Eng muhim qism — rbg rejimi faol bo'lsa, birinchi navbatda shu ishlasin
+    if user_state.get(user_id) == "rbg":
+        await message.answer("⏳ ishlanmoqda... Orqa fon olib tashlanmoqda, biroz kuting...")
 
-@dp.callback_query(F.data == "music")
-async def music_mode(call: CallbackQuery):
-    user_state[call.from_user.id] = "music"
-    await call.message.answer("YouTube linkini yuboring (MP3 qilib beraman):")
-    await call.answer()
+        try:
+            # papka yaratish (xatolik bo'lmasligi uchun)
+            os.makedirs("images", exist_ok=True)
+
+            file = await bot.get_file(message.photo[-1].file_id)
+            path = f"images/{message.photo[-1].file_id}.jpg"
+
+            await bot.download_file(file.file_path, path)
+
+            img = Image.open(path)
+            result = remove(img)
+
+            out = path.replace(".jpg", ".png")
+            result.save(out)
+
+            # FSInputFile ishlatish — tavsiya etiladi
+            await message.answer_photo(
+                photo=FSInputFile(out), 
+                caption="✅ Orqa fon olib tashlandi! Tayyor."
+            )
+
+            # tozalash
+            if os.path.exists(path):
+                os.remove(path)
+            if os.path.exists(out):
+                os.remove(out)
+
+            # rejimni tozalash
+            user_state[user_id] = None
+
+        except Exception as e:
+            await message.answer(f"❌ Xatolik yuz berdi: {str(e)[:200]}")
+            logging.error(f"Background remove error: {e}")
+        
+        return   # Muhim! Boshqa handlerlarga o'tmasin
+
+    # Eski kodni saqlab qoldim (boshqa holatlar uchun)
+    if user_mode.get(user_id) != "rbg":
+        await message.answer("Avval menyudan 🧼 Fonni olib tashlash ni bosing")
+        return
+
+    await message.answer("⏳ ishlanmoqda...")
+
+    try:
+        file = await bot.get_file(message.photo[-1].file_id)
+        path = f"images/{message.photo[-1].file_id}.jpg"
+
+        await bot.download_file(file.file_path, path)
+
+        img = Image.open(path)
+        result = remove(img)
+
+        out = path.replace(".jpg", ".png")
+        result.save(out)
+
+        await message.answer_photo(photo=FSInputFile(out), caption="Tayyor ✅")
+
+        if os.path.exists(path):
+            os.remove(path)
+        if os.path.exists(out):
+            os.remove(out)
+
+    except Exception as e:
+        await message.answer(f"❌ Xatolik: {e}")
+        logging.error(e)
+#wikipedia
+@dp.callback_query(F.data == 'wiki')
+async def wiki_mode(callback: CallbackQuery):
+    user_state[callback.from_user.id] = 'wiki'
+    await callback.message.answer_photo(photo='https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQKJMsaA28A32PrOKnj_PqUF1PezvB1bAygtQ&s')
+    await callback.message.answer("Wikipedia rejimi faollashdi. Mavzu kiriting:",reply_markup=wiki_lang)
+    await callback.answer()
+
+
+@dp.message(lambda message: user_state.get(message.from_user.id) == 'wiki')
+async def wikipedia_uz(message: Message):
+    await message.answer("Wikipedia qidirilmoqda...")
+    try:
+        resport = wikipedia.summary(message.text, sentences=2)
+        await message.answer(resport)
+    except:
+        await message.answer("Kiritilgan mavzu topilmadi.")
+    user_state[message.from_user.id] = None 
+#tarjimon
+@dp.callback_query(F.data == 'lang_ru')
+async def lang_ru(callback: CallbackQuery):
+    wikipedia.set_lang('ru')
+    user_lang[callback.from_user.id] = 'ru'
+    await callback.message.edit_text("siz rus tilini tanladingiz 🇷🇺")
+    await callback.answer()     
+
+@dp.callback_query(F.data == 'lang_en')
+async def lang_ens(callback:CallbackQuery):
+    wikipedia.set_lang('en')
+    user_lang[callback.from_user.id] = 'en'
+    await callback.message.edit_text("siz ingliz tilini tanlandingiz 🇺🇸")
+    await callback.answer()
+
+@dp.callback_query(F.data == "lang_ne")
+async def lang_ne(callback:CallbackQuery):
+    wikipedia.set_lang('ne')
+    user_lang[callback.from_user.id] = 'ne'
+    await callback.message.edit_text("siz nemis tilini tanladingiz 🇩🇪")
+
+
+@dp.callback_query(F.data == "lang_ja")
+async def lang_ja(callback:CallbackQuery):
+    wikipedia.set_lang('ja')
+    user_lang[callback.from_user.id] = 'ja'
+    await callback.message.edit_text("siz yaponiya tilini tanladingiz 🇯🇵")
+
+@dp.callback_query(F.data == 'lang_ar')
+async def lang_ar(callback:CallbackQuery):
+    wikipedia.set_lang('ar')
+    user_lang[callback.from_user.id] = 'ar'
+    await callback.message.edit_text("siz arab tili tanladingiz 🇪🇭")
 
 @dp.callback_query(F.data == "nima")
-async def translate_menu(call: CallbackQuery):
-    await call.message.answer("Tarjima tilini tanlang:", reply_markup=lang_buttons)
-    await call.answer()
+async def tarjimon_mode(callback: CallbackQuery):
+    await callback.message.answer(f"tilni tanlang",reply_markup=lang)
 
-# --- TARJIMON VA WIKI TILLARI ---
-@dp.callback_query(F.data.in_({"ruscha", "nemis", "inglis", "artili"}))
-async def set_translate_lang(call: CallbackQuery):
-    user_state[call.from_user.id] = call.data
-    await call.message.answer(f"Rejim faollashdi. Matn yuboring.")
-    await call.answer()
+#wikipedia
+@dp.callback_query(F.data == "ruscha")
+async def rus(callback:CallbackQuery):
+    user_state[callback.from_user.id] = "ruscha"
+    await callback.message.answer_photo(photo="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRUl1238XhZH88BXkg2RQDJES2OYc7dFq1LvQ&s",caption="Rus tili ishga tushdi")
+    await callback.message.answer("tajimayi rejimi ishga tushdi (UZ -> RU) foalashdi")
+    await callback.answer()
 
-@dp.callback_query(F.data.startswith("lang_"))
-async def set_wiki_lang(call: CallbackQuery):
-    l_code = call.data.split("_")[1]
-    wikipedia.set_lang(l_code)
-    await call.message.answer(f"Wikipedia tili {l_code} ga o'zgartirildi.")
-    await call.answer()
+@dp.message(lambda message: user_state.get(message.from_user.id) == "ruscha")
+async def rusch(message:Message):
+    try:
+        translation = GoogleTranslator(source='auto',target='ru').translate(message.text)
+        await message.answer(f"tarjimon: \n {translation}")
+        tts = gTTS(text=translation,lang='ru')
+        tts.save("voice.mp3")
+        audio = FSInputFile("voice.mp3")
+        await message.answer_audio(audio)
+    except:
+        await message.answer("tarjimada xatolik")
 
-# --- RASM QAYTA ISHLASH (REMBG) ---
-@dp.message(F.photo)
-async def handle_photo(message: Message):
-    user_id = message.from_user.id
-    if user_state.get(user_id) == "rbg":
-        msg = await message.answer("⏳ Ishlanmoqda...")
-        try:
-            os.makedirs("images", exist_ok=True)
-            path = f"images/{message.photo[-1].file_id}.jpg"
-            await bot.download(message.photo[-1], destination=path)
-            
-            img = Image.open(path)
-            result = remove(img)
-            out_path = path.replace(".jpg", ".png")
-            result.save(out_path)
-            
-            await message.answer_photo(photo=FSInputFile(out_path), caption="Tayyor! ✅")
-            os.remove(path)
-            os.remove(out_path)
-        except Exception as e:
-            await message.answer(f"Xatolik: {e}")
-        user_state[user_id] = None
-    else:
-        await message.answer("Rasmni qayta ishlash uchun menyudan 'Fonni olib tashlash'ni tanlang.")
+@dp.callback_query(F.data == "nemis")
+async def nemis(callback:CallbackQuery):
+    user_state[callback.from_user.id] = "nemis"
+    await callback.message.answer_photo(photo="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQacIt2DPCU6KNY9lAJATGR27QGYKvQ5fs2mQ&s",caption="Nemis tili ishga tushdi")
+    await callback.message.answer("tarjima ishga tushdi (UZ -> NEMIS) foalshdi")
+    await callback.answer()
+@dp.message(lambda message: user_state.get(message.from_user.id) == "nemis")
+async def nemis(message:Message):
+    try:
+        translation = GoogleTranslator(source='auto',target='de').translate(message.text)
+        await message.answer(f"tarjimon: \n {translation}")
+        tts = gTTS(text=translation,lang='de')
+        tts.save("voise.mp3")
+        audio = FSInputFile("voise.mp3")
+        await message.answer_audio(audio)
+    except:
+        await message.answer("tarjimada xatolik")
 
-# --- ASOSIY ROUTER (TEXT HANDLER) ---
+@dp.callback_query(F.data == "yapon")
+async def yapan(callback:CallbackQuery):
+    user_state[callback.from_user.id] = "yapon"
+    await callback.message.answer_photo(photo="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTXWpp0Ms1XTfivKpVnyBrbB0YtAI3fZGLgGQ&s",caption="yapon tili ishga tushdi")
+    await callback.message.answer("tarjima ishga tushdi (UZ -> YAPON) foalshdi")
+    await callback.answer()
+@dp.message(lambda message: user_state.get(message.from_user.id) == "yapon")
+async def yapon(message:Message):
+    try:
+        translation = GoogleTranslator(source='auto',target='ja').translate(message.text)
+        await message.answer(f"tarjimon: \n {translation}")
+        tts = gTTS(text=translation,lang='ja')
+        tts.save("voise.mp3")
+        audio = FSInputFile("voise.mp3")
+        await message.answer_audio(audio)
+    except:
+        await message.answer("tarjimada xatolik")
+
+@dp.callback_query(F.data == "inglis")
+async def inglis(callback:CallbackQuery):
+    user_state[callback.from_user.id] = 'inglis'
+    await callback.message.answer_photo(photo='https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSfTuQzpDQyA07GTh8u-tgixSwDhgRMZYC9qw&s',caption="tarjimon tili inglis tili ")
+    await callback.message.answer("tarjima (UZ -> ING)")
+    await callback.answer()
+
+@dp.message(lambda message: user_state.get(message.from_user.id) == 'inglis')
+async def inglis(message:Message):
+    try:
+        translation = GoogleTranslator(source='auto',target='en').translate(message.text)
+        await message.answer(f'tarjimon \n {translation}')
+        tts = gTTS(text=translation,lang='en')
+        tts.save("voise.mp3")
+        audio = FSInputFile("voise.mp3")
+        await message.answer_audio(audio)
+    except:
+        await message.answer("tarjimada xatolik")
+
+@dp.callback_query(F.data == 'artili')
+async def arab_call(callback:CallbackQuery):
+    user_state[callback.from_user.id] = 'artili'
+    await callback.message.answer_photo(photo='https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT6ZPIR9rYhCI2WJK4SjCil-GZ6UfXsMOVzLQ&s',caption=f'tarjimon uzbek tili')
+    await callback.message.answer("tarjimon (UZ -> ARAB TILI) ")
+    await callback.answer()
+@dp.message(lambda message: user_state.get(message.from_user.id) == 'artili')
+async def arab_mess(message:Message):
+    try:
+        translation = GoogleTranslator(source='auto',target='ar').translate(message.text)
+        await message.answer(f'tarjimon \n {translation}')
+        tts = gTTS(text=translation,lang='ar')
+        tts.save("voise.mp3")
+        audio = FSInputFile("voise.mp3")
+        await message.answer_audio(audio)
+    except:
+        await message.answer("tarjimada xatolik")
+
+    
+@dp.message(F.text == 'Aloqa')
+async def Aloqa(message: Message):
+    await message.answer("Aloqa: @Ramziddin0808")
+
+#-------- YOUTUBE -----------
+@dp.callback_query(F.data == "youtube")
+async def yt_mode(call: CallbackQuery):
+    user_state[call.from_user.id] = "youtube"
+    await call.message.answer("YouTube link tashlang")
+    await call.answer()
+#----------- suniy intelekt
+@dp.callback_query(F.data == "ai")
+async def ai_mode(call: CallbackQuery):
+    user_state[call.from_user.id] = "ai"
+    await call.message.answer("🤖 AI mode ON. Savol yozing")
+    await call.answer()
+#--------- MUSIC BOT ---------
+@dp.callback_query(F.data == "music")
+async def music_mode(call: CallbackQuery):
+    user_state[call.from_user.id] = "music"
+    await call.message.answer("Video, link yoki audio yubor 🎵")
+    await call.answer() 
+
+def extract_audio(file_path: str):
+    audio_path = f"{uuid.uuid4()}.mp3"
+
+    video = VideoFileClip(file_path)
+    video.audio.write_audiofile(audio_path)
+
+    return audio_path
+
+#------------ QRCODE-----
+@dp.callback_query(F.data == "qr")
+async def qr_mode(call: CallbackQuery):
+    user_state[call.from_user.id] = "qr"
+    await call.message.answer("Link va Text yuboring")
+    await call.answer()
+
+
+def make_qr(text: str):
+    filename = f"{uuid.uuid4()}.png"
+    img = qrcode.make(text)
+    img.save(filename)
+    return filename
+
+# ---------------- SINGLE MESSAGE HANDLER ----------------
 @dp.message()
-async def main_router(message: Message):
-    user_id = message.from_user.id
-    state = user_state.get(user_id)
+async def router(message: Message):
+    user_id = message.from_user.id
+    state = user_state.get(user_id)
+    # ---------------- QR ----------------
+    if state == "qr":
+        try:
+            file_path = make_qr(message.text)
 
-    if not message.text: return
+            await message.answer_photo(
+                photo=FSInputFile(file_path),
+                caption="QR tayyor ✅"
+            )
 
-    # 1. QR CODE
-    if state == "qr":
-        qr_file = make_qr(message.text)
-        await message.answer_photo(photo=FSInputFile(qr_file), caption="QR kod tayyor!")
-        os.remove(qr_file)
-        user_state[user_id] = None
+            os.remove(file_path)
 
-    # 2. WIKIPEDIA
-    elif state == "wiki":
-        await message.answer("🔍 Qidirilmoqda...")
-        try:
-            summary = wikipedia.summary(message.text, sentences=2)
-            await message.answer(summary)
-        except:
-            await message.answer("Ma'lumot topilmadi.")
-        user_state[user_id] = None
+        except Exception as e:
+            print(e)
+            await message.answer("❌ QR xatolik")
 
-    # 3. TARJIMON
-    elif state in ["ruscha", "nemis", "inglis", "artili"]:
-        targets = {"ruscha": "ru", "nemis": "de", "inglis": "en", "artili": "ar"}
-        target_lang = targets[state]
-        try:
-            trans = GoogleTranslator(source='auto', target=target_lang).translate(message.text)
-            await message.answer(f"Tarjima:\n{trans}")
-            tts = gTTS(text=trans, lang=target_lang)
-            tts.save("voice.mp3")
-            await message.answer_audio(audio=FSInputFile("voice.mp3"))
-            os.remove("voice.mp3")
-        except:
-            await message.answer("Tarjimada xatolik.")
+        return
 
-    # 4. YOUTUBE VIDEO
-    elif state == "youtube":
-        if "youtube.com" in message.text or "youtu.be" in message.text:
-            msg = await message.answer("⏳ Video yuklanmoqda (480p)...")
-            try:
-                file_id = str(uuid.uuid4())
-                filename = f"{file_id}.mp4"
-                ydl_opts = {
-                    'extractor_args': {
-    'youtube': {
-        'player_client': ['android', 'web'],
-        'player_skip': ['configs', 'js'],
-    }
-},
-                    'format': 'best[height<=480]/best',
-                    'outtmpl': filename,
-                    'cookiefile': 'cookies.txt',
-                    'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'noplaylist': True,
-                }
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    ydl.download([message.text])
-                
-                await message.answer_video(video=FSInputFile(filename), caption="Video tayyor! ✅")
-                os.remove(filename)
-                await msg.delete()
-            except Exception as e:
-                await message.answer(f"Xatolik: YouTube blokladi yoki link xato.")
-            user_state[user_id] = None
+    # ---------------- YOUTUBE ----------------
+    if state == "youtube":
+        url = message.text.split("?")[0]
 
-    # 5. MUSIC (MP3)
-    elif state == "music":
-        if "youtube.com" in message.text or "youtu.be" in message.text:
-            msg = await message.answer("🎵 Musiqa tayyorlanmoqda...")
-            try:
-                file_id = str(uuid.uuid4())
-                ydl_opts = {
-                    'format': 'bestaudio/best',
-                    'outtmpl': f"{file_id}.%(ext)s",
-                    'cookiefile': 'cookies.txt',
-                    'postprocessors': [{
-                        'key': 'FFmpegExtractAudio',
-                        'preferredcodec': 'mp3',
-                        'preferredquality': '192',
-                    }],
-                }
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    ydl.download([message.text])
-                
-                audio_file = f"{file_id}.mp3"
-                await message.answer_audio(audio=FSInputFile(audio_file), caption="Musiqa tayyor! 🎵", request_timeout=300)
-                os.remove(audio_file)
-                await msg.delete()
-            except Exception as e:
-                await message.answer(f"Xatolik: Musiqani yuklab bo'lmadi.")
-            user_state[user_id] = None
+        if "youtube.com" not in url and "youtu.be" not in url:
+            await message.answer("❌ YouTube link yubor")
+            return
 
-# --- ASOSIY ISHGA TUSHIRISH ---
+        await message.answer("⏳ yuklanmoqda...")
+
+        try:
+            filename = f"{uuid.uuid4()}.mp4"
+
+            ydl_opts = {
+                "format": "best[height<=480]", 
+    "outtmpl": filename,
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "noplaylist": True,
+    "cookiefile": "cookies.txt",
+    "quiet": False
+            }
+
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
+
+            await message.answer_video(FSInputFile(filename))
+            os.remove(filename)
+
+        except Exception as e:
+            print(e)
+            await message.answer("❌ YouTube xatolik")
+        return
+#-------- MUSIC -----------
+
+    state = user_state.get(message.from_user.id)
+
+    if state != "music":
+        return
+
+    await message.answer("⏳ Tekshirilmoqda...")
+
+    try:
+        # ---------------- LINK ----------------
+        if message.text and message.text.startswith("http"):
+
+            url = message.text
+
+            await message.answer("🔗 Yuklanmoqda,kuting(3-5 minut bo'lishi mumkin)...")
+
+            file_id = str(uuid.uuid4())
+
+            ydl_opts = {
+                'format': 'bestaudio[abr<=128]/bestaudio',
+                'socket_timeout': 30,
+                'outtmpl': f"{file_id}.%(ext)s",
+                'ffmpeg_location': ffmpeg_path,
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': '192',
+                }],
+                'quiet': True
+            }
+
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
+
+            # 🔥 REAL FILE TOPISH
+            audio_file = None
+            for f in os.listdir():
+                if f.startswith(file_id) and f.endswith(".mp3"):
+                    audio_file = f
+                    break
+
+            if not audio_file:
+                await message.answer("❌ Audio topilmadi")
+                return
+
+            await message.answer_audio(
+                FSInputFile(audio_file),
+                request_timeout=120,
+                caption="🎵 Musiqa tayyor"
+            )
+
+            os.remove(audio_file)
+            return
+
+        # ---------------- FILE ----------------
+        file = None
+
+        if message.video:
+            file = await bot.download(message.video)
+
+        elif message.audio:
+            file = await bot.download(message.audio)
+
+        elif message.voice:
+            file = await bot.download(message.voice)
+
+        else:
+            await message.answer("❌ Video, audio yoki link yuboring")
+            return
+
+        await message.answer("⏳ Fayl ishlanmoqda...")
+
+        await message.answer_document(FSInputFile(file.name))
+    except Exception as e:
+        print("ERROR:", e)
+        await message.answer("❌ Xatolik yuz berdi")
 async def main():
-    if not os.path.exists('cookies.txt'):
-        print("⚠️ DIQQAT: cookies.txt topilmadi! YouTube funksiyasi ishlamasligi mumkin.")
-    print("Bot ishga tushdi...")
-    await dp.start_polling(bot)
+    print("Bot ishlamoqda...")
+    await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    asyncio.run(main())
+    asyncio.run(main())
