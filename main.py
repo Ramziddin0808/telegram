@@ -420,14 +420,12 @@ async def router(message: Message):
             filename = f"{uuid.uuid4()}.mp4"
 
             ydl_opts = {
-                "format": "best[height<=480]",
-                "outtmpl": filename,
-                'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                "noplaylist": True,
-                'cookiefile': 'cookies.txt',
-                    'format': 'best',
-                'proxy': 'http://user:password@proxy_address:port',
-                    'noplaylist': True
+                "format": "best[height<=480]", 
+    "outtmpl": filename,
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "noplaylist": True,
+    "cookiefile": "cookies.txt",
+    "quiet": False
             }
 
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
