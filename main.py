@@ -204,6 +204,12 @@ async def main_router(message: Message):
                 file_id = str(uuid.uuid4())
                 filename = f"{file_id}.mp4"
                 ydl_opts = {
+                    'extractor_args': {
+    'youtube': {
+        'player_client': ['android', 'web'],
+        'player_skip': ['configs', 'js'],
+    }
+},
                     'format': 'best[height<=480]/best',
                     'outtmpl': filename,
                     'cookiefile': 'cookies.txt',
