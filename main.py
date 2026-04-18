@@ -80,7 +80,88 @@ async def start(message: Message):
 @dp.message(F.text == "menyu")
 async def yordam(message: Message):
     await message.answer("Vazifani tanlang", reply_markup=keyboard)
+#---------------- 🧼 Fonni olib tashlash -------
+@dp.callback_query(F.data == "rbg")
+async def bg_mode(call: CallbackQuery):
+    user_id = call.from_user.id
+    user_state[user_id] = "rbg"   
+    await call.message.answer("🧽 Rasm yuboring, orqa fon olib tashlanadi\n\n⏳ Rasm yuborganingizdan keyin darhol ishlaydi.")
+    await call.answer()
 
+    
+@dp.message(F.photo)
+async def photo_handler(message: Message):
+    user_id = message.from_user.id
+
+    # Eng muhim qism — rbg rejimi faol bo'lsa, birinchi navbatda shu ishlasin
+    if user_state.get(user_id) == "rbg":
+        await message.answer("⏳ ishlanmoqda... Orqa fon olib tashlanmoqda, biroz kuting...")
+
+        try:
+            # papka yaratish (xatolik bo'lmasligi uchun)
+            os.makedirs("images", exist_ok=True)
+
+            file = await bot.get_file(message.photo[-1].file_id)
+            path = f"images/{message.photo[-1].file_id}.jpg"
+
+            await bot.download_file(file.file_path, path)
+
+            img = Image.open(path)
+            result = remove(img)
+
+            out = path.replace(".jpg", ".png")
+            result.save(out)
+
+            # FSInputFile ishlatish — tavsiya etiladi
+            await message.answer_photo(
+                photo=FSInputFile(out), 
+                caption="✅ Orqa fon olib tashlandi! Tayyor."
+            )
+
+            # tozalash
+            if os.path.exists(path):
+                os.remove(path)
+            if os.path.exists(out):
+                os.remove(out)
+
+            # rejimni tozalash
+            user_state[user_id] = None
+
+        except Exception as e:
+            await message.answer(f"❌ Xatolik yuz berdi: {str(e)[:200]}")
+            logging.error(f"Background remove error: {e}")
+        
+        return   # Muhim! Boshqa handlerlarga o'tmasin
+
+    # Eski kodni saqlab qoldim (boshqa holatlar uchun)
+    if user_mode.get(user_id) != "rbg":
+        await message.answer("Avval menyudan 🧼 Fonni olib tashlash ni bosing")
+        return
+
+    await message.answer("⏳ ishlanmoqda...")
+
+    try:
+        file = await bot.get_file(message.photo[-1].file_id)
+        path = f"images/{message.photo[-1].file_id}.jpg"
+
+        await bot.download_file(file.file_path, path)
+
+        img = Image.open(path)
+        result = remove(img)
+
+        out = path.replace(".jpg", ".png")
+        result.save(out)
+
+        await message.answer_photo(photo=FSInputFile(out), caption="Tayyor ✅")
+
+        if os.path.exists(path):
+            os.remove(path)
+        if os.path.exists(out):
+            os.remove(out)
+
+    except Exception as e:
+        await message.answer(f"❌ Xatolik: {e}")
+        logging.error(e)
 #wikipedia
 @dp.callback_query(F.data == 'wiki')
 async def wiki_mode(callback: CallbackQuery):
@@ -408,91 +489,6 @@ async def router(message: Message):
     except Exception as e:
         print("ERROR:", e)
         await message.answer("❌ Xatolik yuz berdi")
-#---------------- 🧼 Fonni olib tashlash -------
-@dp.callback_query(F.data == "rbg")
-async def bg_mode(call: CallbackQuery):
-    user_id = call.from_user.id
-    user_state[user_id] = "rbg"   
-    await call.message.answer("🧽 Rasm yuboring, orqa fon olib tashlanadi\n\n⏳ Rasm yuborganingizdan keyin darhol ishlaydi.")
-    await call.answer()
-
-    
-@dp.message(F.photo)
-async def photo_handler(message: Message):
-    user_id = message.from_user.id
-
-    # Eng muhim qism — rbg rejimi faol bo'lsa, birinchi navbatda shu ishlasin
-    if user_state.get(user_id) == "rbg":
-        await message.answer("⏳ ishlanmoqda... Orqa fon olib tashlanmoqda, biroz kuting...")
-
-        try:
-            # papka yaratish (xatolik bo'lmasligi uchun)
-            os.makedirs("images", exist_ok=True)
-
-            file = await bot.get_file(message.photo[-1].file_id)
-            path = f"images/{message.photo[-1].file_id}.jpg"
-
-            await bot.download_file(file.file_path, path)
-
-            img = Image.open(path)
-            result = remove(img)
-
-            out = path.replace(".jpg", ".png")
-            result.save(out)
-
-            # FSInputFile ishlatish — tavsiya etiladi
-            await message.answer_photo(
-                photo=FSInputFile(out), 
-                caption="✅ Orqa fon olib tashlandi! Tayyor."
-            )
-
-            # tozalash
-            if os.path.exists(path):
-                os.remove(path)
-            if os.path.exists(out):
-                os.remove(out)
-
-            # rejimni tozalash
-            user_state[user_id] = None
-
-        except Exception as e:
-            await message.answer(f"❌ Xatolik yuz berdi: {str(e)[:200]}")
-            logging.error(f"Background remove error: {e}")
-        
-        return   # Muhim! Boshqa handlerlarga o'tmasin
-
-    # Eski kodni saqlab qoldim (boshqa holatlar uchun)
-    if user_mode.get(user_id) != "rbg":
-        await message.answer("Avval menyudan 🧼 Fonni olib tashlash ni bosing")
-        return
-
-    await message.answer("⏳ ishlanmoqda...")
-
-    try:
-        file = await bot.get_file(message.photo[-1].file_id)
-        path = f"images/{message.photo[-1].file_id}.jpg"
-
-        await bot.download_file(file.file_path, path)
-
-        img = Image.open(path)
-        result = remove(img)
-
-        out = path.replace(".jpg", ".png")
-        result.save(out)
-
-        await message.answer_photo(photo=FSInputFile(out), caption="Tayyor ✅")
-
-        if os.path.exists(path):
-            os.remove(path)
-        if os.path.exists(out):
-            os.remove(out)
-
-    except Exception as e:
-        await message.answer(f"❌ Xatolik: {e}")
-        logging.error(e)
-
-
-
 async def main():
     print("Bot ishlamoqda...")
     await dp.start_polling(bot)
