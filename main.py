@@ -367,27 +367,6 @@ def make_qr(text: str):
 async def router(message: Message):
     user_id = message.from_user.id
     state = user_state.get(user_id)
-    # ---------------- AI ----------------
-    if state == "ai":
-        await message.answer("⏳ O‘ylayapman...")
-
-        try:
-            response = client.models.generate_content(
-                model="gemini-3-flash-preview",
-                contents=message.text
-            )
-
-            await message.answer(response.text)
-
-        except Exception as e:
-            print("ERROR:", e)
-
-            if "429" in str(e):
-                await message.answer("⏳ Limit tugadi, keyinroq urin")
-            else:
-                await message.answer("❌ AI xatolik")
-
-        return
     # ---------------- QR ----------------
     if state == "qr":
         try:
