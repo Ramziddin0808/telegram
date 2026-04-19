@@ -324,33 +324,38 @@ async def router(message: Message):
 
     # ---------------- YOUTUBE ----------------
     if state == "youtube":
-    url = message.text.strip()
+        url = message.text.split("?")[0]
 
-    if "youtube.com" not in url and "youtu.be" not in url:
-        await message.answer("❌ To‘g‘ri YouTube link yubor")
+        if "youtube.com" not in url and "youtu.be" not in url:
+            await message.answer("❌ YouTube link yubor")
+            return
+
+        await message.answer("⏳ yuklanmoqda...")
+
+        try:
+            filename = f"{uuid.uuid4()}.mp4"
+
+            ydl_opts = {
+              "format": "best[height<=480]",
+               "outtmpl": filename,
+                "noplaylist": True, 
+    "outtmpl": filename,
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "noplaylist": True,
+    "cookiefile": "cookies.txt",
+    "quiet": False
+            }
+
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
+
+            await message.answer_video(FSInputFile(filename))
+            os.remove(filename)
+
+        except Exception as e:
+            print(e)
+            await message.answer("❌ YouTube xatolik")
         return
-
-    await message.answer("⏳ Yuklanmoqda...")
-
-    try:
-        filename = f"{uuid.uuid4()}.mp4"
-
-        ydl_opts = {
-            "format": "best[height<=480]/best",
-            "outtmpl": filename,
-            "noplaylist": True,
-            "quiet": True
-        }
-
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
-
-        await message.answer_video(FSInputFile(filename))
-        os.remove(filename)
-
-    except Exception as e:
-        print("YT ERROR:", e)
-        await message.answer(f"❌ Xatolik:\n{str(e)[:200]}")
 #-------- MUSIC -----------
 
     state = user_state.get(message.from_user.id)
