@@ -334,23 +334,13 @@ async def router(message: Message):
 
         try:
             filename = f"{uuid.uuid4()}.mp4"
-
             ydl_opts = {
-                'extractor_args': {
-    'youtube': {
-        'player_client': ['android', 'web'],
-        'player_skip': ['configs', 'js'],
-    }
-},
-              "format": "best[height<=480]",
-               "outtmpl": filename,
-                "noplaylist": True, 
+    "format": "best[height<=480]/best",
     "outtmpl": filename,
-    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "noplaylist": True,
-    "cookiefile": "cookies.txt",
-    "quiet": False
-            }
+    "quiet": True,
+    "cookiefile": "cookies.txt"
+}
 
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
