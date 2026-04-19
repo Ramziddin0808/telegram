@@ -325,7 +325,8 @@ async def router(message: Message):
     # ---------------- YOUTUBE ----------------
     if state == "youtube":
     url = message.text.strip()
-        if "youtube.com" not in url and "youtu.be" not in url:
+
+    if "youtube.com" not in url and "youtu.be" not in url:
         await message.answer("❌ To‘g‘ri YouTube link yubor")
         return
 
