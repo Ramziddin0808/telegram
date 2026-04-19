@@ -323,35 +323,31 @@ async def router(message: Message):
         return
 
     # ---------------- YOUTUBE ----------------
-    if state == "youtube":
-        url = message.text.split("?")[0]
-
         if "youtube.com" not in url and "youtu.be" not in url:
-            await message.answer("❌ YouTube link yubor")
-            return
-
-        await message.answer("⏳ yuklanmoqda...")
-
-        try:
-            filename = f"{uuid.uuid4()}.mp4"
-            ydl_opts = {
-    "format": "best[height<=480]/best",
-    "outtmpl": filename,
-    "noplaylist": True,
-    "quiet": True,
-    "cookiefile": "cookies.txt"
-}
-
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([url])
-
-            await message.answer_video(FSInputFile(filename))
-            os.remove(filename)
-
-        except Exception as e:
-            print(e)
-            await message.answer("❌ YouTube xatolik")
+        await message.answer("❌ To‘g‘ri YouTube link yubor")
         return
+
+    await message.answer("⏳ Yuklanmoqda...")
+
+    try:
+        filename = f"{uuid.uuid4()}.mp4"
+
+        ydl_opts = {
+            "format": "best[height<=480]/best",
+            "outtmpl": filename,
+            "noplaylist": True,
+            "quiet": True
+        }
+
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
+
+        await message.answer_video(FSInputFile(filename))
+        os.remove(filename)
+
+    except Exception as e:
+        print("YT ERROR:", e)
+        await message.answer(f"❌ Xatolik:\n{str(e)[:200]}")
 #-------- MUSIC -----------
 
     state = user_state.get(message.from_user.id)
